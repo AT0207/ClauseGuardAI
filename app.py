@@ -3,6 +3,7 @@ import re
 import io
 import json
 import html
+import hashlib
 import streamlit as st
 import pandas as pd
 from pypdf import PdfReader
@@ -10,292 +11,439 @@ from docx import Document
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# PAGE CONFIGURATION
+# ----------------------------------------
+# PAGE SETTINGS
+# ----------------------------------------
+
 st.set_page_config(
-    page_title="ClauseGuard AI | Contract Intelligence",
+    page_title="ClauseGuard AI",
     page_icon="🧑‍⚖️",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# DESIGN
+# ----------------------------------------
+# SOFT OLIVE DESIGN
+# ----------------------------------------
+
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
+
+:root {
+    --olive: #697B55;
+    --olive-dark: #485A39;
+    --sage: #E8EDDF;
+    --ivory: #F8F9F4;
+    --cream: #FFFFFF;
+    --border: #E0E7D8;
+    --text: #344235;
+    --muted: #71806B;
+}
 
 html, body, [data-testid="stApp"] {
-    font-family: 'DM Sans', sans-serif;
-    color: #243B53;
+    font-family: 'DM Sans', sans-serif !important;
 }
 
 .stApp {
-    background: #F7F9FC;
+    background-color: #F8F9F4;
+    color: #344235;
 }
 
 .block-container {
-    max-width: 1080px;
-    padding-top: 2rem;
-    padding-bottom: 4rem;
+    max-width: 1100px;
+    padding-top: 1.8rem;
+    padding-bottom: 3rem;
 }
 
 h1, h2, h3 {
-    font-family: 'Playfair Display', serif !important;
-    color: #193C58 !important;
+    font-family: 'DM Serif Display', serif !important;
+    color: #485A39 !important;
+    font-weight: 400 !important;
 }
 
 p, label, button, input, textarea {
     font-family: 'DM Sans', sans-serif !important;
 }
 
-.hero {
-    background: linear-gradient(120deg, #FFFFFF, #EAF3FA);
-    border: 1px solid #DDE8F2;
-    border-radius: 22px;
-    padding: 38px 42px;
-    margin-bottom: 28px;
-    box-shadow: 0 8px 28px rgba(30, 65, 95, 0.04);
+a {
+    color: #536D44;
 }
 
-.logo {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    color: #193C58;
-    font-size: 21px;
-    font-weight: 700;
+[data-testid="stHeader"] {
+    background-color: #F8F9F4;
 }
 
-.lawyer {
-    background: #DDEDF8;
-    border-radius: 16px;
+[data-testid="stToolbar"] {
+    color: #485A39;
+}
+
+[data-testid="stRadio"] label {
+    color: #485A39 !important;
+}
+
+div[role="radiogroup"] {
+    background-color: #F0F3EA;
+    border-radius: 14px;
     padding: 10px;
-    font-size: 30px;
+}
+
+div[role="radiogroup"] label {
+    border-radius: 10px;
+    padding: 6px 10px;
+}
+
+.stButton > button[kind="primary"] {
+    background-color: #697B55;
+    color: white;
+    border: 1px solid #697B55;
+    border-radius: 12px;
+    font-weight: 600;
+    padding: 0.7rem 1.5rem;
+}
+
+.stButton > button[kind="primary"]:hover {
+    background-color: #485A39;
+    color: white;
+    border-color: #485A39;
+}
+
+.stButton > button:not([kind="primary"]) {
+    background-color: #FFFFFF;
+    border: 1px solid #CBD7C0;
+    border-radius: 12px;
+    color: #485A39;
+}
+
+.stButton > button:not([kind="primary"]):hover {
+    background-color: #E8EDDF;
+    color: #344235;
+    border-color: #697B55;
+}
+
+[data-testid="stFileUploader"] {
+    background-color: white;
+    border-radius: 14px;
+    border: 1px solid #E0E7D8;
+    padding: 12px;
+}
+
+[data-testid="stExpander"] {
+    background: white;
+    border: 1px solid #E0E7D8;
+    border-radius: 14px;
+}
+
+[data-testid="stMetric"] {
+    background: white;
+    border: 1px solid #E0E7D8;
+    border-radius: 14px;
+    padding: 18px;
+}
+
+[data-testid="stAlert"] {
+    border-radius: 12px;
+}
+
+[data-testid="stTextArea"] textarea {
+    background-color: white;
+    color: #344235;
+    border-radius: 12px;
+    border-color: #CBD7C0;
+}
+
+div[data-testid="stDownloadButton"] button {
+    border-radius: 12px;
+    color: #485A39;
+    border: 1px solid #CBD7C0;
+    background-color: white;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 0 18px;
+}
+
+.brand-icon {
+    background: #E8EDDF;
+    border-radius: 16px;
+    padding: 12px;
+    font-size: 28px;
+}
+
+.brand-name {
+    font-family: 'DM Serif Display', serif;
+    color: #485A39;
+    font-size: 27px;
+}
+
+.brand-caption {
+    color: #829177;
+    font-size: 10px;
+    letter-spacing: 2px;
+    font-weight: 600;
+}
+
+.hero {
+    background: linear-gradient(125deg, #FFFFFF, #EDF2E7);
+    border: 1px solid #E0E7D8;
+    border-radius: 26px;
+    padding: 55px 48px;
+    margin-top: 24px;
+    margin-bottom: 30px;
 }
 
 .eyebrow {
-    color: #537F9E;
+    color: #798B6D;
     font-size: 12px;
-    font-weight: 700;
     letter-spacing: 2px;
+    font-weight: 700;
     text-transform: uppercase;
-    margin-top: 30px;
 }
 
 .hero-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 42px;
-    line-height: 1.2;
-    color: #193C58;
-    font-weight: 600;
-    margin: 12px 0;
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(40px, 5vw, 65px);
+    line-height: 1.14;
+    color: #485A39;
+    margin: 18px 0;
 }
 
-.hero-subtitle {
-    color: #63798B;
-    font-size: 16px;
-    line-height: 1.7;
-    max-width: 690px;
+.hero-description {
+    color: #667560;
+    font-size: 17px;
+    line-height: 1.8;
+    max-width: 670px;
 }
 
-.section-label {
-    font-size: 12px;
-    letter-spacing: 1.5px;
-    font-weight: 700;
-    color: #6C879E;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-}
-
-.metric-box {
+.soft-card {
     background: white;
-    border: 1px solid #E0E8F0;
-    border-radius: 15px;
-    padding: 24px;
+    border: 1px solid #E0E7D8;
+    border-radius: 20px;
+    padding: 26px;
+    margin: 10px 0;
+    min-height: 170px;
+}
+
+.card-icon {
+    font-size: 25px;
+    margin-bottom: 14px;
+}
+
+.card-title {
+    color: #485A39;
+    font-weight: 700;
+    font-size: 17px;
+    margin-bottom: 8px;
+}
+
+.card-text {
+    color: #71806B;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.page-label {
+    font-size: 12px;
+    color: #839477;
+    letter-spacing: 2px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-top: 28px;
+}
+
+.page-heading {
+    font-family: 'DM Serif Display', serif;
+    color: #485A39;
+    font-size: 43px;
+    margin-top: 10px;
     margin-bottom: 12px;
 }
 
-.metric-value {
-    font-size: 34px;
-    font-weight: 700;
-}
-
-.metric-label {
-    color: #708398;
-    font-size: 13px;
+.page-description {
+    color: #71806B;
+    font-size: 16px;
+    line-height: 1.8;
+    margin-bottom: 30px;
 }
 
 .finding {
     background: white;
-    border: 1px solid #E1E9F1;
-    border-left: 5px solid #7D9DB8;
+    border: 1px solid #E0E7D8;
+    border-left: 5px solid #697B55;
+    border-radius: 14px;
     padding: 20px 24px;
-    border-radius: 12px;
-    margin: 14px 0;
+    margin: 16px 0 12px;
 }
 
 .finding-title {
+    color: #485A39;
     font-size: 18px;
     font-weight: 700;
-    color: #193C58;
 }
 
-.risk-tag {
+.tag {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 20px;
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 1px;
-    padding: 5px 10px;
-    border-radius: 20px;
-}
-
-.stButton > button[kind="primary"] {
-    background: #28658D;
-    border: none;
-    color: white;
-    border-radius: 10px;
-    font-weight: 600;
-    padding: 10px 26px;
-}
-
-.stButton > button[kind="primary"]:hover {
-    background: #194D70;
-    color: white;
-}
-
-div[data-testid="stFileUploader"] {
-    background: white;
-    border-radius: 12px;
+    margin-top: 8px;
 }
 
 .footer {
+    color: #8B9982;
     text-align: center;
     font-size: 12px;
-    color: #8294A4;
-    padding: 25px;
-    margin-top: 40px;
-    border-top: 1px solid #E0E8F0;
+    border-top: 1px solid #E0E7D8;
+    margin-top: 60px;
+    padding: 30px;
+    line-height: 2;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# RISK DETECTION RULES
+# ----------------------------------------
+# CONTRACT RISK RULES
+# ----------------------------------------
+
 RULES = {
     "Unlimited liability": {
         "pattern": r"unlimited liability|without limitation of liability|liability shall not be limited",
         "risk": "HIGH",
-        "explanation": "This provision may create uncapped financial exposure.",
-        "recommendation": "Consider a reasonable financial cap and appropriate exclusions."
+        "explanation": "The provision may create uncapped financial exposure.",
+        "recommendation": "Consider negotiating a liability cap and appropriate exclusions."
     },
     "Unilateral termination": {
         "pattern": r"terminate at any time|terminate without notice|terminate for any reason",
         "risk": "HIGH",
-        "explanation": "One party may have broad rights to terminate the agreement.",
-        "recommendation": "Review notice periods, grounds for termination and reciprocity."
+        "explanation": "A party may be able to terminate the agreement without adequate notice.",
+        "recommendation": "Review notice periods, termination grounds and reciprocity."
     },
     "Broad indemnification": {
         "pattern": r"indemnify.*all losses|indemnify.*any and all|hold harmless.*all claims",
         "risk": "HIGH",
-        "explanation": "An extensive indemnity may transfer substantial liabilities.",
-        "recommendation": "Review scope, causation, exclusions and liability caps."
+        "explanation": "The indemnity could transfer extensive liabilities.",
+        "recommendation": "Consider the indemnity's scope, exclusions and financial limits."
     },
     "Automatic renewal": {
         "pattern": r"automatically renew|automatic renewal|renewed automatically",
         "risk": "MEDIUM",
-        "explanation": "The contract may renew without express further agreement.",
-        "recommendation": "Check renewal periods and cancellation deadlines."
+        "explanation": "The agreement may renew without further express approval.",
+        "recommendation": "Check renewal periods and cancellation requirements."
     },
     "Unilateral price changes": {
         "pattern": r"change prices at any time|increase fees at any time|modify fees without notice",
         "risk": "MEDIUM",
-        "explanation": "One party may be entitled to alter the commercial terms.",
-        "recommendation": "Consider advance notice and objective price-adjustment criteria."
+        "explanation": "One party may have broad discretion to change prices.",
+        "recommendation": "Consider objective adjustment criteria and advance notice."
     },
     "Exclusive jurisdiction": {
         "pattern": r"exclusive jurisdiction|courts of .* shall have exclusive",
         "risk": "REVIEW",
-        "explanation": "Disputes may need to be resolved before specified courts.",
-        "recommendation": "Verify the suitability of the forum and applicable law."
+        "explanation": "Disputes may need to be brought in a specified jurisdiction.",
+        "recommendation": "Review the selected courts and governing law."
     },
     "Non-compete restriction": {
         "pattern": r"non.compet|shall not compete|prohibited from competing",
         "risk": "REVIEW",
-        "explanation": "This provision may restrict future commercial activities.",
-        "recommendation": "Review duration, territory, scope and enforceability."
+        "explanation": "The clause may restrict future commercial activity.",
+        "recommendation": "Review geographical scope, duration and enforceability."
     }
 }
 
 CATEGORIES = {
-    "Liability": "liability damages losses indemnification financial exposure",
-    "Termination": "termination cancellation expiry ending notice agreement",
-    "Payment": "payment price fees invoice charges financial",
-    "Confidentiality": "confidential information secrecy nondisclosure",
-    "Dispute resolution": "jurisdiction courts arbitration governing law",
-    "Intellectual property": "copyright trademarks intellectual property ownership",
-    "Other": "general contractual provision miscellaneous"
+    "Liability": "liability damages indemnification loss",
+    "Termination": "termination cancellation expiry notice",
+    "Payment": "fees payment price invoice",
+    "Confidentiality": "secrecy confidential nondisclosure",
+    "Dispute resolution": "jurisdiction courts arbitration disputes",
+    "Intellectual property": "copyright trademarks ownership",
+    "Other": "general contract provisions"
 }
 
 SAMPLE = """
 SERVICE AGREEMENT
 
-1. Liability
+1. LIABILITY
+
 The supplier shall have unlimited liability for all damages.
 
-2. Termination
+2. TERMINATION
+
 The customer may terminate this agreement at any time without notice.
 
-3. Renewal
+3. RENEWAL
+
 This agreement shall automatically renew for successive periods of twelve months.
 
-4. Indemnification
+4. INDEMNIFICATION
+
 The supplier shall indemnify the customer against any and all losses.
 
-5. Payment
+5. PAYMENT
+
 The customer shall pay invoices within thirty days.
 
-6. Confidentiality
+6. CONFIDENTIALITY
+
 Both parties shall keep confidential information private.
 
-7. Jurisdiction
+7. JURISDICTION
+
 The courts of London shall have exclusive jurisdiction.
 """
 
-# DOCUMENT PROCESSING
-def extract_text(file):
-    data = file.getvalue()
-    name = file.name.lower()
+# ----------------------------------------
+# ANALYSIS FUNCTIONS
+# ----------------------------------------
+
+def extract_text(uploaded):
+    data = uploaded.getvalue()
+    name = uploaded.name.lower()
 
     if name.endswith(".pdf"):
         reader = PdfReader(io.BytesIO(data))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
+        return "\n".join(
+            page.extract_text() or ""
+            for page in reader.pages
+        )
 
     if name.endswith(".docx"):
         document = Document(io.BytesIO(data))
-        return "\n".join(p.text for p in document.paragraphs)
+        return "\n".join(
+            paragraph.text for paragraph in document.paragraphs
+        )
 
     return data.decode("utf-8", errors="replace")
 
 
 def split_clauses(text):
     return [
-        clause.strip()
-        for clause in re.split(r"\n\s*\n", text.strip())
-        if clause.strip()
+        item.strip()
+        for item in re.split(r"\n\s*\n", text.strip())
+        if item.strip()
     ]
 
 
 def categorise(clauses):
     descriptions = list(CATEGORIES.values())
-    vectorizer = TfidfVectorizer(stop_words="english")
 
-    matrix = vectorizer.fit_transform(descriptions + clauses)
+    matrix = TfidfVectorizer(
+        stop_words="english"
+    ).fit_transform(descriptions + clauses)
+
     similarities = cosine_similarity(
         matrix[len(descriptions):],
         matrix[:len(descriptions)]
     )
 
-    labels = list(CATEGORIES.keys())
+    names = list(CATEGORIES.keys())
 
     return [
-        labels[row.argmax()] if row.max() > 0 else "Other"
+        names[row.argmax()] if row.max() > 0 else "Other"
         for row in similarities
     ]
 
@@ -321,249 +469,575 @@ def analyse_contract(text):
                     "Recommendation": rule["recommendation"]
                 })
 
-    return findings
+    order = {"HIGH": 0, "MEDIUM": 1, "REVIEW": 2}
+
+    return sorted(
+        findings,
+        key=lambda item: order.get(item["Risk"], 3)
+    )
 
 
-# HEADER
+# ----------------------------------------
+# SITE HEADER AND NAVIGATION
+# ----------------------------------------
+
 st.markdown("""
-<div class="hero">
-    <div class="logo">
-        <span class="lawyer">🧑‍⚖️</span>
-        ClauseGuard AI
-    </div>
-    <div class="eyebrow">INTELLIGENT CONTRACT REVIEW</div>
-    <div class="hero-title">
-        Clarity in every clause.
-    </div>
-    <div class="hero-subtitle">
-        Understand your contracts with confidence.
-        Identify potential legal risks, discover important provisions,
-        and make more informed decisions with AI-assisted analysis.
+<div class="brand">
+    <div class="brand-icon">🧑‍⚖️</div>
+    <div>
+        <div class="brand-name">ClauseGuard AI</div>
+        <div class="brand-caption">LEGAL INTELLIGENCE, SIMPLIFIED</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# MAIN INTERFACE
-st.markdown('<div class="section-label">01 / DOCUMENT REVIEW</div>',
-            unsafe_allow_html=True)
+if "page" not in st.session_state:
+    st.session_state.page = "Home"
 
-st.header("Analyse your contract")
-
-st.write(
-    "Choose a sample agreement, upload your own document, "
-    "or paste contract text below."
+page = st.radio(
+    "Navigation",
+    [
+        "Home",
+        "Analyse a Contract",
+        "Legal News",
+        "The Legal 500"
+    ],
+    horizontal=True,
+    key="page",
+    label_visibility="collapsed"
 )
 
-mode = st.radio(
-    "Select input method",
-    ["Sample contract", "Upload document", "Paste text"],
-    horizontal=True
-)
+# ========================================
+# PAGE 1 — HOME
+# ========================================
 
-text = ""
+if page == "Home":
 
-if mode == "Sample contract":
-    st.info("A fictional service agreement is ready for analysis.")
-    with st.expander("Preview sample contract"):
-        st.text(SAMPLE)
-    text = SAMPLE
+    st.markdown("""
+    <div class="hero">
+        <div class="eyebrow">
+            A MORE THOUGHTFUL WAY TO REVIEW CONTRACTS
+        </div>
 
-elif mode == "Upload document":
-    uploaded = st.file_uploader(
-        "Choose your contract",
-        type=["pdf", "docx", "txt"]
-    )
+        <div class="hero-title">
+            Clarity in<br>every clause.
+        </div>
 
-    if uploaded:
-        try:
-            text = extract_text(uploaded)
-            if text.strip():
-                st.success("Document loaded successfully.")
-            else:
-                st.warning(
-                    "No readable text found. Scanned PDFs may require OCR."
-                )
-        except Exception as error:
-            st.error(f"Unable to read this document: {error}")
+        <div class="hero-description">
+            Contracts should inspire confidence, not confusion.
+            ClauseGuard AI helps you identify potential contractual
+            risks, understand important provisions and approach
+            every agreement with greater clarity.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-else:
-    text = st.text_area(
-        "Paste contract text",
-        height=240,
-        placeholder="Paste your agreement here..."
-    )
+    if st.button(
+        "Begin your contract review  →",
+        type="primary",
+        use_container_width=True
+    ):
+        st.session_state.page = "Analyse a Contract"
+        st.rerun()
 
-st.write("")
+    st.write("")
+    st.write("")
 
-if st.button("🔍 Analyse Contract", type="primary", use_container_width=True):
-    if not text.strip():
-        st.warning("Please provide a contract first.")
-    else:
-        with st.spinner("Reviewing contractual provisions..."):
-            st.session_state["findings"] = analyse_contract(text)
-            st.session_state["analysed"] = True
+    st.markdown("""
+    <div class="page-label">THE PLATFORM</div>
+    <div class="page-heading">
+        A clearer perspective on contracts.
+    </div>
+    """, unsafe_allow_html=True)
 
-# ANALYSIS REPORT
-if st.session_state.get("analysed", False):
-    findings = st.session_state.get("findings", [])
+    col1, col2, col3 = st.columns(3)
 
-    st.divider()
-
-    st.markdown(
-        '<div class="section-label">02 / ANALYSIS RESULTS</div>',
-        unsafe_allow_html=True
-    )
-
-    st.header("Your contract risk report")
-
-    st.write(
-        "The following findings identify provisions requiring "
-        "closer consideration. Risk ratings are indicative."
-    )
-
-    high = sum(f["Risk"] == "HIGH" for f in findings)
-    medium = sum(f["Risk"] == "MEDIUM" for f in findings)
-    review = sum(f["Risk"] == "REVIEW" for f in findings)
-
-    metrics = [
-        ("Issues identified", len(findings), "#193C58"),
-        ("High priority", high, "#BE615B"),
-        ("Medium priority", medium, "#B88B45"),
-        ("For review", review, "#447E9C")
+    cards = [
+        (
+            "📄",
+            "Understand",
+            "Upload a contract and discover the provisions "
+            "that may deserve closer attention."
+        ),
+        (
+            "🌿",
+            "Identify",
+            "Detect selected contractual risks using "
+            "explainable AI-assisted analysis."
+        ),
+        (
+            "✦",
+            "Decide",
+            "Receive clear explanations and suggested "
+            "questions for legal review."
+        )
     ]
 
-    columns = st.columns(4)
-
-    for column, (label, number, color) in zip(columns, metrics):
+    for column, (icon, title, description) in zip(
+        [col1, col2, col3], cards
+    ):
         with column:
             st.markdown(f"""
-            <div class="metric-box">
-                <div class="metric-value" style="color:{color}">
-                    {number}
-                </div>
-                <div class="metric-label">{label}</div>
+            <div class="soft-card">
+                <div class="card-icon">{icon}</div>
+                <div class="card-title">{title}</div>
+                <div class="card-text">{description}</div>
             </div>
             """, unsafe_allow_html=True)
 
-    if findings:
-        st.subheader("Risk overview")
+    st.write("")
+    st.write("")
 
-        chart_data = pd.DataFrame({
-            "Risk": ["HIGH", "MEDIUM", "REVIEW"],
-            "Number of issues": [high, medium, review]
-        }).set_index("Risk")
+    st.markdown("""
+    <div class="page-label">HOW IT WORKS</div>
+    <div class="page-heading">
+        Simple by design.
+    </div>
+    """, unsafe_allow_html=True)
 
-        st.bar_chart(chart_data, color="#739CB9")
+    st.markdown("""
+    **01 — Share your document**
 
-        st.subheader("Detailed findings")
+    Upload a PDF, Word document or text file.
+    Alternatively, use our sample contract.
 
-        priority_order = {"HIGH": 0, "MEDIUM": 1, "REVIEW": 2}
+    **02 — Explore the analysis**
 
-        sorted_findings = sorted(
-            findings,
-            key=lambda x: priority_order.get(x["Risk"], 3)
+    ClauseGuard scans the document for selected risk
+    indicators and categorises contractual language.
+
+    **03 — Review the findings**
+
+    Understand why provisions were flagged and
+    download a structured report.
+    """)
+
+    st.write("")
+
+    st.info(
+        "ClauseGuard is an educational legal-technology prototype. "
+        "It assists with preliminary document screening and does "
+        "not replace professional legal advice."
+    )
+
+# ========================================
+# PAGE 2 — CONTRACT ANALYSIS
+# ========================================
+
+elif page == "Analyse a Contract":
+
+    st.markdown("""
+    <div class="page-label">CONTRACT INTELLIGENCE</div>
+    <div class="page-heading">Your contract, made clearer.</div>
+    <div class="page-description">
+        Start by uploading an agreement, exploring our sample
+        contract or pasting your own text.
+    </div>
+    """, unsafe_allow_html=True)
+
+    input_method = st.radio(
+        "How would you like to begin?",
+        [
+            "Upload a contract",
+            "Try a sample",
+            "Paste text"
+        ],
+        horizontal=True
+    )
+
+    text = ""
+
+    if input_method == "Upload a contract":
+
+        st.write("#### Upload your document")
+
+        uploaded = st.file_uploader(
+            "Select a PDF, Word or text document",
+            type=["pdf", "docx", "txt"]
         )
 
-        for number, finding in enumerate(sorted_findings, 1):
-            risk = finding["Risk"]
+        if uploaded:
+            try:
+                text = extract_text(uploaded)
 
-            color = {
-                "HIGH": "#BE615B",
-                "MEDIUM": "#B88B45",
-                "REVIEW": "#447E9C"
-            }.get(risk, "#739CB9")
+                if text.strip():
+                    st.success("Your document has been loaded.")
+                else:
+                    st.warning(
+                        "No readable text was found. "
+                        "Scanned PDFs may require OCR."
+                    )
 
-            title = html.escape(finding["Issue"])
+            except Exception as error:
+                st.error(f"Unable to read this file: {error}")
 
-            st.markdown(f"""
-            <div class="finding" style="border-left-color:{color}">
-                <div style="display:flex;justify-content:space-between;
-                            align-items:center;gap:12px">
-                    <span class="finding-title">{number}. {title}</span>
-                    <span class="risk-tag"
-                          style="color:{color};background:#F5F7FA">
-                        {risk}
-                    </span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+    elif input_method == "Try a sample":
 
-            st.write("**Relevant provision**")
-            st.info(finding["Clause"])
+        st.write("#### Sample service agreement")
 
-            st.write("**Why this matters**")
-            st.write(finding["Explanation"])
+        st.caption(
+            "Explore ClauseGuard using a fictional "
+            "commercial agreement."
+        )
 
-            st.write("**Suggested review**")
-            st.write(finding["Recommendation"])
+        text = SAMPLE
 
-            st.divider()
-
-        st.subheader("Export your report")
-
-        report = pd.DataFrame(sorted_findings)
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.download_button(
-                "📥 Download CSV",
-                report.to_csv(index=False).encode("utf-8"),
-                "ClauseGuard_Report.csv",
-                "text/csv",
-                use_container_width=True
-            )
-
-        with col2:
-            st.download_button(
-                "📥 Download JSON",
-                json.dumps(sorted_findings, indent=2),
-                "ClauseGuard_Report.json",
-                "application/json",
-                use_container_width=True
-            )
+        with st.expander("Read the sample contract"):
+            st.text(SAMPLE)
 
     else:
-        st.success("No predefined risk patterns were detected.")
-        st.warning(
-            "This does not mean the contract is risk-free. "
-            "Only a limited set of issues is screened."
+
+        st.write("#### Paste your agreement")
+
+        text = st.text_area(
+            "Contract text",
+            height=280,
+            placeholder="Paste the terms of your agreement here..."
         )
 
-# METHODOLOGY
-st.divider()
+    # Avoid displaying findings for a different document.
+    document_key = hashlib.sha256(
+        text.encode("utf-8")
+    ).hexdigest()
 
-with st.expander("How does ClauseGuard AI work?"):
-    st.write("""
-    ClauseGuard combines two methods:
+    st.write("")
 
-    **1. Natural Language Processing (NLP)**
+    if st.button(
+        "Analyse my contract  →",
+        type="primary",
+        use_container_width=True
+    ):
 
-    TF-IDF and cosine similarity are used to categorise
-    contractual provisions by their textual content.
+        if not text.strip():
+            st.warning("Please provide a contract first.")
 
-    **2. Explainable risk screening**
+        else:
+            with st.spinner("Reviewing your contract..."):
+                findings = analyse_contract(text)
 
-    Transparent pattern-matching rules identify selected
-    contractual expressions and flag potential concerns.
+                st.session_state["findings"] = findings
+                st.session_state["document_key"] = document_key
 
-    Every finding includes its underlying contractual text,
-    an explanation, and a suggested review action.
+    # RESULTS
+    if (
+        st.session_state.get("document_key") == document_key
+        and "findings" in st.session_state
+    ):
 
-    **Limitations**
+        findings = st.session_state["findings"]
 
-    This is an educational prototype, not a trained legal
-    risk prediction model. It does not assess the full legal
-    effect or enforceability of contractual terms. Results
-    may include false positives and missed risks.
-    """)
+        st.divider()
+
+        st.markdown("""
+        <div class="page-label">YOUR RESULTS</div>
+        <div class="page-heading">Contract review report.</div>
+        <div class="page-description">
+            An overview of provisions flagged for further consideration.
+        </div>
+        """, unsafe_allow_html=True)
+
+        high = sum(f["Risk"] == "HIGH" for f in findings)
+        medium = sum(f["Risk"] == "MEDIUM" for f in findings)
+        review = sum(f["Risk"] == "REVIEW" for f in findings)
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Total findings", len(findings))
+
+        with col2:
+            st.metric("High priority", high)
+
+        with col3:
+            st.metric("Medium priority", medium)
+
+        with col4:
+            st.metric("For review", review)
+
+        if findings:
+
+            st.write("")
+            st.subheader("Your risk overview")
+
+            chart = pd.DataFrame({
+                "Priority": ["High", "Medium", "Review"],
+                "Findings": [high, medium, review]
+            }).set_index("Priority")
+
+            st.bar_chart(chart, color="#81966D")
+
+            st.write("")
+            st.subheader("Detailed findings")
+
+            for index, finding in enumerate(findings, 1):
+
+                risk = finding["Risk"]
+
+                if risk == "HIGH":
+                    color = "#B76D63"
+                    background = "#F9EDEA"
+                elif risk == "MEDIUM":
+                    color = "#A68B55"
+                    background = "#F8F2E5"
+                else:
+                    color = "#697B55"
+                    background = "#E8EDDF"
+
+                title = html.escape(finding["Issue"])
+
+                st.markdown(f"""
+                <div class="finding" style="border-left-color:{color}">
+                    <div class="finding-title">
+                        {index:02d} · {title}
+                    </div>
+                    <div class="tag"
+                         style="color:{color};background:{background}">
+                        {risk} PRIORITY
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                with st.expander(
+                    "Read the provision and explanation",
+                    expanded=True
+                ):
+
+                    st.write("**Relevant clause**")
+                    st.info(finding["Clause"])
+
+                    st.write("**Why it matters**")
+                    st.write(finding["Explanation"])
+
+                    st.write("**Suggested review**")
+                    st.write(finding["Recommendation"])
+
+            st.write("")
+            st.subheader("Keep a copy of your report")
+
+            report = pd.DataFrame(findings)
+
+            col_a, col_b = st.columns(2)
+
+            with col_a:
+                st.download_button(
+                    "Download CSV report",
+                    report.to_csv(index=False).encode("utf-8"),
+                    "ClauseGuard_Report.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+
+            with col_b:
+                st.download_button(
+                    "Download JSON report",
+                    json.dumps(findings, indent=2),
+                    "ClauseGuard_Report.json",
+                    "application/json",
+                    use_container_width=True
+                )
+
+        else:
+            st.success(
+                "No predefined risk indicators were identified."
+            )
+            st.warning(
+                "This does not establish that the contract "
+                "is free from legal or commercial risk."
+            )
+
+    st.write("")
+
+    with st.expander("About our analysis methodology"):
+
+        st.write("""
+        ClauseGuard uses natural language processing
+        (TF-IDF and cosine similarity) to classify
+        contractual text.
+
+        It also applies transparent pattern-matching
+        rules to flag selected risk indicators.
+
+        The prototype does not use a trained legal
+        risk prediction model and cannot determine
+        the legal enforceability of a provision.
+
+        Findings may contain false positives or omit
+        important risks. Every result should therefore
+        be checked by a qualified professional.
+        """)
+
+# ========================================
+# PAGE 3 — LEGAL NEWS
+# ========================================
+
+elif page == "Legal News":
+
+    st.markdown("""
+    <div class="page-label">LEGAL INSIGHTS</div>
+    <div class="page-heading">Stay informed.</div>
+    <div class="page-description">
+        Explore legal developments, industry perspectives
+        and professional commentary from established publications.
+    </div>
+    """, unsafe_allow_html=True)
+
+    news_sources = [
+        {
+            "name": "Reuters — Legal",
+            "description": (
+                "Reporting on litigation, regulation, "
+                "legal business and international developments."
+            ),
+            "url": "https://www.reuters.com/legal/"
+        },
+        {
+            "name": "The Law Society Gazette",
+            "description": (
+                "Legal news, professional practice, "
+                "regulation and developments in England and Wales."
+            ),
+            "url": "https://www.lawgazette.co.uk/"
+        },
+        {
+            "name": "Legal Cheek",
+            "description": (
+                "News about law firms, legal careers, "
+                "training and developments in the profession."
+            ),
+            "url": "https://www.legalcheek.com/"
+        },
+        {
+            "name": "EUR-Lex",
+            "description": (
+                "Access to EU legislation, case law "
+                "and official legal materials."
+            ),
+            "url": "https://eur-lex.europa.eu/"
+        }
+    ]
+
+    for source in news_sources:
+
+        st.markdown(f"""
+        <div class="soft-card" style="min-height:auto">
+            <div class="card-title">
+                {html.escape(source["name"])}
+            </div>
+            <div class="card-text">
+                {html.escape(source["description"])}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.link_button(
+            "Visit publication  ↗",
+            source["url"],
+            use_container_width=False
+        )
+
+        st.write("")
+
+    st.caption(
+        "These are links to independent external publications. "
+        "ClauseGuard does not reproduce or independently "
+        "verify their current articles."
+    )
+
+# ========================================
+# PAGE 4 — THE LEGAL 500
+# ========================================
+
+elif page == "The Legal 500":
+
+    st.markdown("""
+    <div class="page-label">PROFESSIONAL RESOURCES</div>
+    <div class="page-heading">The Legal 500.</div>
+    <div class="page-description">
+        Explore an established international directory
+        of law firms and legal professionals.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="hero">
+        <div class="eyebrow">
+            DISCOVER THE LEGAL PROFESSION
+        </div>
+
+        <div class="hero-title">
+            Find expertise.<br>
+            Explore excellence.
+        </div>
+
+        <div class="hero-description">
+            The Legal 500 provides independent research,
+            rankings and commentary on law firms and
+            legal professionals across jurisdictions
+            and practice areas.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.link_button(
+        "Visit The Legal 500  ↗",
+        "https://www.legal500.com/",
+        use_container_width=True
+    )
+
+    st.write("")
+    st.write("")
+
+    st.markdown("""
+    <div class="page-label">WHY EXPLORE THE DIRECTORY?</div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        <div class="soft-card">
+            <div class="card-icon">🌍</div>
+            <div class="card-title">
+                International perspective
+            </div>
+            <div class="card-text">
+                Explore law firm research across
+                numerous jurisdictions and sectors.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div class="soft-card">
+            <div class="card-icon">⚖️</div>
+            <div class="card-title">
+                Professional expertise
+            </div>
+            <div class="card-text">
+                Research established legal practices,
+                professionals and areas of specialisation.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.caption(
+        "ClauseGuard AI is an independent educational project "
+        "and is not affiliated with or endorsed by The Legal 500."
+    )
+
+# ----------------------------------------
+# FOOTER
+# ----------------------------------------
 
 st.markdown("""
 <div class="footer">
-    🧑‍⚖️ ClauseGuard AI · Contract Intelligence Platform
+    🧑‍⚖️ ClauseGuard AI
     <br>
-    Built for the Advanced AI Algorithms Project
+    Clarity in every clause.
+    <br>
+    An educational legal intelligence project
     <br><br>
-    Educational demonstration only · Not legal advice
+    Thoughtfully designed · Not legal advice
 </div>
 """, unsafe_allow_html=True)
